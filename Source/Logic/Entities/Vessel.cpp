@@ -18,8 +18,8 @@ sf::Clock vesselClock;
 
 id_resource Vessel::grassWalkSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Run/run_grass.ogg"));
 id_resource Vessel::stoneWalkSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Run/run_stone.ogg"));
-//static id_resource Vessel::hurtSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Hurt/vessel_hurt.ogg"));
-//static id_resource Vessel::attackSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Attack/whip_01.ogg"));
+id_resource Vessel::hurtSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Hurt/vessel_hurt.ogg"));
+id_resource Vessel::attackSound = SoundManager::store(SoundManager::load("Assets/Sound/Player/Attack/whip_01.ogg"));
 
 id_resource vesselShadow;
 
@@ -86,16 +86,16 @@ Vessel::Vessel( SGO& _sprite, SGO _mask, SGO _weapon,
 
 	myX = 0;
 	myY = 0;
-
-	currentHealth = 500;
-	maxHealth = 500;
+	
+	currentHealth = 100;
+	maxHealth = 100;
 
 	runAnim = new Animation(&_sprite, sf::Vector2i(32, 32), 8, 3);
 	runAnim_mask = new Animation(&mask_sprite, sf::Vector2i(32, 32), 8, 3);
 	runAnim_wep = new Animation(&weapon_sprite, sf::Vector2i(32, 32), 8, 3);
 
 	this->add(mask_sprite);
-  this->add(weapon_sprite);
+  	this->add(weapon_sprite);
 
 	// Add the drop shadow
 	vesselShadow = Manager::TextureManager::store(
@@ -108,23 +108,25 @@ Vessel::Vessel( SGO& _sprite, SGO _mask, SGO _weapon,
 	this->add(shadow);
 	shadow.sprite().setOrigin(-6, -28);
 
+	myHealthBar = NULL;
+
 	std::cout << "Vessel constructed successfully!" << std::endl;
 }
 
 /*-------------------------------------------
 --
--- PROGRAMMER:  ???
+-- PROGRAMMER:  Sebastian Pelka
 --				Sanders Lee (Debugged synchronization problem across clients,
 --							 Added sound for walking)
+--				Alex Lam
+--				Julian Brandrick
+--				Thomas Tallentire
 --
 -- Called every game loop. dequeues all events from the entity's
 -- controller and proceses those events
 ---------------------------------------------*/
 void Vessel::onUpdate(float deltaTime)
 {
-	static bool soundActive = false;
-	static BlockZone steppedTile = GRASS;
-
 	float val;
 
 	attCool += deltaTime;
@@ -164,58 +166,58 @@ void Vessel::onUpdate(float deltaTime)
 
 				// set position to last known position on server to avoid
 				// sync problems across the clients
-	      Entity::aMove(ev->getX(), ev->getY(), false);
-			//	printf("vessel x, y: expected: %f %f actual: %f %f\n", ev->getX(), ev->getY(), getEntity()->left, getEntity()->top);
+	      		Entity::aMove(ev->getX(), ev->getY(), false);
+				//	printf("vessel x, y: expected: %f %f actual: %f %f\n", ev->getX(), ev->getY(), getEntity()->left, getEntity()->top);
 
-			if (yDir == -1)
-			{
-				newYSpeed -= ySpeed;
-
-				if ( !runAnim->isRunning() )
+				if (yDir == -1)
 				{
-					runAnim->run(true);
-					runAnim_mask->run(true);
-					runAnim_wep->run(true);
-				}
-			}
-			else if (yDir == 1)
-			{
-				newYSpeed += ySpeed;
+					newYSpeed -= ySpeed;
 
-				if ( !runAnim->isRunning() )
-				{
-					//runAnim->run(true);
-					runAnim->run(true);
-					runAnim_mask->run(true);
-					runAnim_wep->run(true);
+					if ( !runAnim->isRunning() )
+					{
+						runAnim->run(true);
+						runAnim_mask->run(true);
+						runAnim_wep->run(true);
+					}
 				}
-			}
-			else if (xDir == 1)
-			{
-				newXSpeed += xSpeed;
+				else if (yDir == 1)
+				{
+					newYSpeed += ySpeed;
 
-				if ( !runAnim->isRunning() )
-				{
-					//runAnim->run(true);
-					runAnim->run(true);
-					runAnim_mask->run(true);
-					runAnim_wep->run(true);
+					if ( !runAnim->isRunning() )
+					{
+						//runAnim->run(true);
+						runAnim->run(true);
+						runAnim_mask->run(true);
+						runAnim_wep->run(true);
+					}
 				}
-			}
-			else if (xDir == -1)
-			{
-				newXSpeed -= xSpeed;
+				else if (xDir == 1)
+				{
+					newXSpeed += xSpeed;
 
-				if ( !runAnim->isRunning() )
-				{
-					//runAnim->run(true);
-					runAnim->run(true);
-					runAnim_mask->run(true);
-					runAnim_wep->run(true);
+					if ( !runAnim->isRunning() )
+					{
+						//runAnim->run(true);
+						runAnim->run(true);
+						runAnim_mask->run(true);
+						runAnim_wep->run(true);
+					}
 				}
+				else if (xDir == -1)
+				{
+					newXSpeed -= xSpeed;
+
+					if ( !runAnim->isRunning() )
+					{
+						//runAnim->run(true);
+						runAnim->run(true);
+						runAnim_mask->run(true);
+						runAnim_wep->run(true);
+					}
+				}
+			break;
 			}
-break;
-}
 
 			case ::Marx::ATTACK:
 			{
@@ -228,6 +230,8 @@ break;
 						attCool = 0;
 					}
 				}
+				else
+					playAttackSound();
 
                 break;
 			}
@@ -242,13 +246,17 @@ break;
 						attCool = 0;
 					}
 				}
+				else
+					playAttackSound();
+
                 break;
 			}
             case ::Marx::SET_HEALTH:
             {
                 SetHealthEvent* ev = (SetHealthEvent*) (*it);
 				std::cout << "Vessel:: set health" << std::endl;
-                setHealth(getHealth()-ev->getChange());
+                setHealth(getHealth() - ev->getChange());
+				playHurtSound();
 				std::cout << "Vessel:: Health = " << currentHealth << std::endl;
 				if(currentHealth <= 0)
 				{
@@ -278,11 +286,12 @@ break;
 				{
 					case SKILLTYPE::HEAL:
 						currentHealth += ev->getValue();
-						myHealthBar->update((float)currentHealth/(float)maxHealth);
+						if (myHealthBar) myHealthBar->update((float)currentHealth/(float)maxHealth);
 					break;
 					case SKILLTYPE::DMG:
 						currentHealth -= ev->getValue();
-						myHealthBar->update((float)currentHealth/(float)maxHealth);
+						if (myHealthBar) myHealthBar->update((float)currentHealth/(float)maxHealth);
+						playHurtSound();
 					break;
 					case SKILLTYPE::BUFF:
 						val = ((float)ev->getValue()) / 100.0;
@@ -295,6 +304,13 @@ break;
 
 						xSpeed -= val;
 						ySpeed -= val;
+					break;
+					case SKILLTYPE::BIGHEAL:
+						currentHealth += ev->getValue();
+						myHealthBar->update((float)currentHealth/(float)maxHealth);
+					break;
+					case SKILLTYPE::SPAWN:
+						// Vessel implementation not needed
 					break;
 				}
 
@@ -351,11 +367,31 @@ break;
 	{
 		Entity::aMove(servX, servY, false);
 	}*/
-	/***
-	*
-	* Code for playing sounds
-	*
-	***/
+
+	playFootstepSound();
+	Entity::rMove(newXSpeed, newYSpeed,false);
+
+}
+
+void Vessel::setPlayerEntity(PlayerEntity *entity)
+{
+	player = entity;
+}
+
+/***
+--
+--	DESIGNER:	Sanders Lee
+--
+--	PROGRAMMER:	Sanders Lee
+--
+--	Code for playing footstep sounds
+--
+***/
+void Vessel::playFootstepSound()
+{
+	static bool soundActive = false;
+	static BlockZone steppedTile = GRASS;
+
 	// Sounds for walking:
 	// first get the tile type we're walking on
 	Cell* footstepTile = *getCell().begin();
@@ -398,14 +434,46 @@ break;
 		footstep.stop();
 		soundActive = false;
 	}
-
-	Entity::rMove(newXSpeed, newYSpeed,false);
-
 }
 
-void Vessel::setPlayerEntity(PlayerEntity *entity)
+/***
+--
+--	DESIGNER:	Sanders Lee
+--
+--	PROGRAMMER:	Sanders Lee
+--
+--	Code for playing hurt sounds
+--
+***/
+void Vessel::playHurtSound()
 {
-	player = entity;
+	sf::Vector2f soundPos(left + newXSpeed, top + newYSpeed);
+	voice.setPosition(left + newXSpeed, top + newYSpeed, 0);  // this line prevent's player character's
+															  // voice from fading & being off-center
+	voice.setMinDistance(3.0);
+	voice = SoundManager::play(hurtSound, soundPos);
+	voice.play();
+	//printf("Hurt sound should play\n");
+}
+
+/***
+--
+--	DESIGNER:	Sanders Lee
+--
+--	PROGRAMMER:	Sanders Lee
+--
+--	Code for playing attack sounds
+--
+***/
+void Vessel::playAttackSound()
+{
+	sf::Vector2f soundPos(left + newXSpeed, top + newYSpeed);
+	voice.setPosition(left + newXSpeed, top + newYSpeed, 0);  // this line prevent's player character's
+															  // voice from fading & being off-center
+	voice.setMinDistance(3.0);
+	voice = SoundManager::play(attackSound, soundPos);
+	voice.play();
+	//printf("Attack sound should play\n");
 }
 
 /*---------
@@ -971,6 +1039,9 @@ int Vessel::getDefaultSpeed()
 -- DESIGNER:	Sanders Lee
 --
 -- PROGRAMMER:	Sanders Lee
+--		Marc Rafanan
+--		Jonathan Chu
+--		
 --
 -- INTERFACE: bool Vessel::checkDeath()
 --
@@ -981,7 +1052,7 @@ int Vessel::getDefaultSpeed()
 ----------------------------------------------------------------------------------------------------------------------*/
 bool Vessel::checkDeath()
 {
-	return (top == -100 && left == -100);
+	return (currentHealth <= 0);
 }
 
 /*------------------------------------------------------------------------------------------------------------------
@@ -1203,7 +1274,7 @@ void Vessel::setHealth(int health)
     else if (currentHealth > maxHealth)
         currentHealth = maxHealth;
 
-    myHealthBar->update((float)currentHealth/(float)maxHealth);
+    if (myHealthBar) myHealthBar->update((float)currentHealth/(float)maxHealth);
 }
 
 void Vessel::setSpeed(int _speed)
